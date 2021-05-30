@@ -119,7 +119,9 @@ callbacks will be called with an error with code `ECANCELLED`.
 
 ### `resolver.setLocalAddress([ipv4][, ipv6])`
 <!-- YAML
-added: v15.1.0
+added:
+  - v15.1.0
+  - v14.17.0
 -->
 
 * `ipv4` {string} A string representation of an IPv4 address.
@@ -155,7 +157,7 @@ section if a custom port is used.
   '4.4.4.4',
   '2001:4860:4860::8888',
   '4.4.4.4:1053',
-  '[2001:4860:4860::8888]:1053'
+  '[2001:4860:4860::8888]:1053',
 ]
 ```
 
@@ -439,7 +441,9 @@ will contain an array of canonical name records available for the `hostname`
 
 ## `dns.resolveCaa(hostname, callback)`
 <!-- YAML
-added: v15.0.0
+added:
+  - v15.0.0
+  - v14.17.0
 -->
 
 * `hostname` {string}
@@ -450,7 +454,7 @@ added: v15.0.0
 Uses the DNS protocol to resolve `CAA` records for the `hostname`. The
 `addresses` argument passed to the `callback` function
 will contain an array of certification authority authorization records
-available for the `hostname` (e.g. `[{critial: 0, iodef:
+available for the `hostname` (e.g. `[{critical: 0, iodef:
 'mailto:pki@example.com'}, {critical: 128, issue: 'pki.example.com'}]`).
 
 ## `dns.resolveMx(hostname, callback)`
@@ -645,7 +649,7 @@ dns.setServers([
   '4.4.4.4',
   '[2001:4860:4860::8888]',
   '4.4.4.4:1053',
-  '[2001:4860:4860::8888]:1053'
+  '[2001:4860:4860::8888]:1053',
 ]);
 ```
 
@@ -732,7 +736,9 @@ The following methods from the `dnsPromises` API are available:
 
 ### `resolver.cancel()`
 <!-- YAML
-added: REPLACEME
+added:
+  - v15.3.0
+  - v14.17.0
 -->
 
 Cancel all outstanding DNS queries made by this resolver. The corresponding
@@ -755,7 +761,7 @@ section if a custom port is used.
   '4.4.4.4',
   '2001:4860:4860::8888',
   '4.4.4.4:1053',
-  '[2001:4860:4860::8888]:1053'
+  '[2001:4860:4860::8888]:1053',
 ]
 ```
 
@@ -960,7 +966,9 @@ Here is an example of the result object:
 
 ### `dnsPromises.resolveCaa(hostname)`
 <!-- YAML
-added: v15.0.0
+added:
+  - v15.0.0
+  - v14.17.0
 -->
 
 * `hostname` {string}
@@ -968,7 +976,7 @@ added: v15.0.0
 Uses the DNS protocol to resolve `CAA` records for the `hostname`. On success,
 the `Promise` is resolved with an array of objects containing available
 certification authority authorization records available for the `hostname`
-(e.g. `[{critial: 0, iodef: 'mailto:pki@example.com'},{critical: 128, issue:
+(e.g. `[{critical: 0, iodef: 'mailto:pki@example.com'},{critical: 128, issue:
 'pki.example.com'}]`).
 
 ### `dnsPromises.resolveCname(hostname)`
@@ -1148,7 +1156,7 @@ dnsPromises.setServers([
   '4.4.4.4',
   '[2001:4860:4860::8888]',
   '4.4.4.4:1053',
-  '[2001:4860:4860::8888]:1053'
+  '[2001:4860:4860::8888]:1053',
 ]);
 ```
 

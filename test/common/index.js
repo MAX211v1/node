@@ -34,9 +34,14 @@ const util = require('util');
 const { isMainThread } = require('worker_threads');
 
 const tmpdir = require('./tmpdir');
-const bits = ['arm64', 'mips', 'mipsel', 'ppc64', 's390x', 'x64']
+const bits = ['arm64', 'mips', 'mipsel', 'ppc64', 'riscv64', 's390x', 'x64']
   .includes(process.arch) ? 64 : 32;
 const hasIntl = !!process.config.variables.v8_enable_i18n_support;
+
+const {
+  atob,
+  btoa
+} = require('buffer');
 
 // Some tests assume a umask of 0o022 so set that up front. Tests that need a
 // different umask will set it themselves.
@@ -50,7 +55,11 @@ const noop = () => {};
 
 const hasCrypto = Boolean(process.versions.openssl) &&
                   !process.env.NODE_SKIP_CRYPTO;
-const hasQuic = hasCrypto && Boolean(process.versions.ngtcp2);
+
+const hasOpenSSL3 = hasCrypto &&
+    require('crypto').constants.OPENSSL_VERSION_NUMBER >= 805306368;
+
+const hasQuic = hasCrypto && !!process.config.variables.openssl_quic;
 
 // Check for flags. Skip this for workers (both, the `cluster` module and
 // `worker_threads`) and child processes.
@@ -61,7 +70,7 @@ if (process.argv.length === 2 &&
     isMainThread &&
     hasCrypto &&
     require.main &&
-    require('cluster').isMaster) {
+    require('cluster').isPrimary) {
   // The copyright notice is relatively big and the flags could come afterwards.
   const bytesToRead = 1500;
   const buffer = Buffer.allocUnsafe(bytesToRead);
@@ -253,6 +262,8 @@ function platformTimeout(ms) {
 }
 
 let knownGlobals = [
+  atob,
+  btoa,
   clearImmediate,
   clearInterval,
   clearTimeout,
@@ -276,8 +287,12 @@ if (global.gc) {
   knownGlobals.push(global.gc);
 }
 
-function allowGlobals(...whitelist) {
-  knownGlobals = knownGlobals.concat(whitelist);
+if (global.performance) {
+  knownGlobals.push(global.performance);
+}
+
+function allowGlobals(...allowlist) {
+  knownGlobals = knownGlobals.concat(allowlist);
 }
 
 if (process.env.NODE_TEST_KNOWN_GLOBALS !== '0') {
@@ -372,10 +387,28 @@ function _mustCallInner(fn, criteria = 1, field) {
 
   mustCallChecks.push(context);
 
-  return function() {
+  const _return = function() { // eslint-disable-line func-style
     context.actual++;
     return fn.apply(this, arguments);
   };
+  // Function instances have own properties that may be relevant.
+  // Let's replicate those properties to the returned function.
+  // Refs: https://tc39.es/ecma262/#sec-function-instances
+  Object.defineProperties(_return, {
+    name: {
+      value: fn.name,
+      writable: false,
+      enumerable: false,
+      configurable: true,
+    },
+    length: {
+      value: fn.length,
+      writable: false,
+      enumerable: false,
+      configurable: true,
+    },
+  });
+  return _return;
 }
 
 function hasMultiLocalhost() {
@@ -424,7 +457,7 @@ function getCallSite(top) {
   const err = new Error();
   Error.captureStackTrace(err, top);
   // With the V8 Error API, the stack is not formatted until it is accessed
-  err.stack;
+  err.stack; // eslint-disable-line no-unused-expressions
   Error.prepareStackTrace = originalStackFormatter;
   return err.stack;
 }
@@ -597,7 +630,7 @@ function getArrayBufferViews(buf) {
     Uint32Array,
     Float32Array,
     Float64Array,
-    DataView
+    DataView,
   ];
 
   for (const type of arrayBufferViews) {
@@ -611,10 +644,6 @@ function getArrayBufferViews(buf) {
 
 function getBufferSources(buf) {
   return [...getArrayBufferViews(buf), new Uint8Array(buf).buffer];
-}
-
-function disableCrashOnUnhandledRejection() {
-  process.on('unhandledRejection', () => {});
 }
 
 function getTTYfd() {
@@ -697,8 +726,8 @@ function gcUntil(name, condition) {
   });
 }
 
-function requireNoPackageJSONAbove() {
-  let possiblePackage = path.join(__dirname, '..', 'package.json');
+function requireNoPackageJSONAbove(dir = __dirname) {
+  let possiblePackage = path.join(dir, '..', 'package.json');
   let lastPackage = null;
   while (possiblePackage !== lastPackage) {
     if (fs.existsSync(possiblePackage)) {
@@ -717,7 +746,6 @@ const common = {
   canCreateSymLink,
   childShouldThrowAndAbort,
   createZeroFilledFile,
-  disableCrashOnUnhandledRejection,
   expectsError,
   expectWarning,
   gcUntil,
@@ -727,6 +755,7 @@ const common = {
   getTTYfd,
   hasIntl,
   hasCrypto,
+  hasOpenSSL3,
   hasQuic,
   hasMultiLocalhost,
   invalidArgTypeHelper,

@@ -3,9 +3,11 @@
 #include <sstream>
 #include "debug_utils-inl.h"
 #include "env-inl.h"
+#include "node_errors.h"
 #include "node_external_reference.h"
 #include "node_internals.h"
 #include "node_main_instance.h"
+#include "node_snapshotable.h"
 #include "node_v8_platform-inl.h"
 
 namespace node {
@@ -14,9 +16,10 @@ using v8::Context;
 using v8::HandleScope;
 using v8::Isolate;
 using v8::Local;
-using v8::Object;
 using v8::SnapshotCreator;
 using v8::StartupData;
+using v8::TryCatch;
+using v8::Value;
 
 template <typename T>
 void WriteVector(std::stringstream* ss, const T* vec, size_t size) {
@@ -25,7 +28,7 @@ void WriteVector(std::stringstream* ss, const T* vec, size_t size) {
   }
 }
 
-std::string FormatBlob(v8::StartupData* blob,
+std::string FormatBlob(StartupData* blob,
                        const std::vector<size_t>& isolate_data_indexes,
                        const EnvSerializeInfo& env_info) {
   std::stringstream ss;
@@ -75,26 +78,14 @@ const EnvSerializeInfo* NodeMainInstance::GetEnvSerializeInfo() {
   return ss.str();
 }
 
-static v8::StartupData SerializeNodeContextInternalFields(Local<Object> holder,
-                                                          int index,
-                                                          void* env) {
-  void* ptr = holder->GetAlignedPointerFromInternalField(index);
-  if (ptr == nullptr || ptr == env) {
-    return StartupData{nullptr, 0};
-  }
-  if (ptr == env && index == ContextEmbedderIndex::kEnvironment) {
-    return StartupData{nullptr, 0};
-  }
-
-  // No embedder objects in the builtin snapshot yet.
-  UNREACHABLE();
-  return StartupData{nullptr, 0};
-}
-
 std::string SnapshotBuilder::Generate(
     const std::vector<std::string> args,
     const std::vector<std::string> exec_args) {
   Isolate* isolate = Isolate::Allocate();
+  isolate->SetCaptureStackTraceForUncaughtExceptions(
+    true,
+    10,
+    v8::StackTrace::StackTraceOptions::kDetailed);
   per_process::v8_platform.Platform()->RegisterIsolate(isolate,
                                                        uv_default_loop());
   std::unique_ptr<NodeMainInstance> main_instance;
@@ -120,9 +111,19 @@ std::string SnapshotBuilder::Generate(
       creator.SetDefaultContext(Context::New(isolate));
       isolate_data_indexes = main_instance->isolate_data()->Serialize(&creator);
 
-      Local<Context> context = NewContext(isolate);
+      // Run the per-context scripts
+      Local<Context> context;
+      {
+        TryCatch bootstrapCatch(isolate);
+        context = NewContext(isolate);
+        if (bootstrapCatch.HasCaught()) {
+          PrintCaughtException(isolate, context, bootstrapCatch);
+          abort();
+        }
+      }
       Context::Scope context_scope(context);
 
+      // Create the environment
       env = new Environment(main_instance->isolate_data(),
                             context,
                             args,
@@ -130,12 +131,24 @@ std::string SnapshotBuilder::Generate(
                             nullptr,
                             node::EnvironmentFlags::kDefaultFlags,
                             {});
-      env->RunBootstrapping().ToLocalChecked();
+      // Run scripts in lib/internal/bootstrap/
+      {
+        TryCatch bootstrapCatch(isolate);
+        v8::MaybeLocal<Value> result = env->RunBootstrapping();
+        if (bootstrapCatch.HasCaught()) {
+          PrintCaughtException(isolate, context, bootstrapCatch);
+        }
+        result.ToLocalChecked();
+      }
+
       if (per_process::enabled_debug_list.enabled(DebugCategory::MKSNAPSHOT)) {
         env->PrintAllBaseObjects();
         printf("Environment = %p\n", env);
       }
+
+      // Serialize the native states
       env_info = env->Serialize(&creator);
+      // Serialize the context
       size_t index = creator.AddContext(
           context, {SerializeNodeContextInternalFields, env});
       CHECK_EQ(index, NodeMainInstance::kNodeContextIndex);

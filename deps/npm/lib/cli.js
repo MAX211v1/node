@@ -1,5 +1,7 @@
 // Separated out for easier unit testing
 module.exports = (process) => {
+  // set it here so that regardless of what happens later, we don't
+  // leak any private CLI configs to other programs
   process.title = 'npm'
 
   const {
@@ -38,11 +40,14 @@ module.exports = (process) => {
   npm.load(async er => {
     if (er)
       return errorHandler(er)
+
+    // npm --version=cli
     if (npm.config.get('version', 'cli')) {
-      console.log(npm.version)
+      npm.output(npm.version)
       return errorHandler.exit(0)
     }
 
+    // npm --versions=cli
     if (npm.config.get('versions', 'cli')) {
       npm.argv = ['version']
       npm.config.set('usage', false, 'cli')
@@ -55,9 +60,18 @@ module.exports = (process) => {
     if (impl)
       impl(npm.argv, errorHandler)
     else {
-      npm.config.set('usage', false)
-      npm.argv.unshift(cmd)
-      npm.commands.help(npm.argv, errorHandler)
+      try {
+        if (cmd) {
+          const didYouMean = require('./utils/did-you-mean.js')
+          const suggestions = await didYouMean(npm, npm.localPrefix, cmd)
+          npm.output(`Unknown command: "${cmd}"${suggestions}\n\nTo see a list of supported npm commands, run:\n  npm help`)
+        } else
+          npm.output(npm.usage)
+        process.exitCode = 1
+        return errorHandler()
+      } catch (err) {
+        errorHandler(err)
+      }
     }
   })
 }

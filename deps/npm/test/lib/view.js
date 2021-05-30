@@ -1,338 +1,352 @@
 const t = require('tap')
-const requireInject = require('require-inject')
+
+// run the same as tap does when running directly with node
+process.stdout.columns = undefined
+
+const mockNpm = require('../fixtures/mock-npm')
 
 let logs
-const cleanLogs = (done) => {
+const cleanLogs = () => {
   logs = ''
   const fn = (...args) => {
     logs += '\n'
     args.map(el => logs += el)
   }
   console.log = fn
-  done()
 }
 
 const packument = (nv, opts) => {
-  if (!opts.fullMetadata) {
+  if (!opts.fullMetadata)
     throw new Error('must fetch fullMetadata')
-  }
 
-  if (!opts.preferOnline) {
+  if (!opts.preferOnline)
     throw new Error('must fetch with preferOnline')
-  }
 
   const mocks = {
-    'red': {
-      'name' : 'red',
+    red: {
+      name: 'red',
       'dist-tags': {
-        '1.0.1': {}
+        '1.0.1': {},
       },
-      'time': {
-        'unpublished': new Date()
-      }
+      time: {
+        unpublished: new Date(),
+      },
     },
-    'blue': {
-      'name': 'blue',
-      'dist-tags': {},
-      'time': {
-        '1.0.0': '2019-08-06T16:21:09.842Z'
+    blue: {
+      name: 'blue',
+      'dist-tags': {
+        latest: '1.0.0',
       },
-      'versions': {
+      time: {
+        '1.0.0': '2019-08-06T16:21:09.842Z',
+      },
+      versions: {
         '1.0.0': {
-          'name': 'blue',
-          'version': '1.0.0',
-          'dist': {
-            'shasum': '123',
-            'tarball': 'http://hm.blue.com/1.0.0.tgz',
-            'integrity': '---',
-            'fileCount': 1,
-            'unpackedSize': 1              
-          }
+          name: 'blue',
+          version: '1.0.0',
+          dist: {
+            shasum: '123',
+            tarball: 'http://hm.blue.com/1.0.0.tgz',
+            integrity: '---',
+            fileCount: 1,
+            unpackedSize: 1,
+          },
         },
-        '1.0.1': {}
-      }
-    },
-    'cyan': {
-      '_npmUser': {
-        'name': 'claudia',
-        'email': 'claudia@cyan.com'
-      } ,
-      'name': 'cyan',
-      'dist-tags': {},
-      'versions': {
-        '1.0.0': {
-          'version': '1.0.0',
-          'name': 'cyan',
-          'dist': {
-            'shasum': '123',
-            'tarball': 'http://hm.cyan.com/1.0.0.tgz',
-            'integrity': '---',
-            'fileCount': 1,
-            'unpackedSize': 1
-          }
-        },
-        '1.0.1': {}
-      }
-    },
-    'brown': {
-      'name': 'brown'
-    },
-    'yellow': {
-      '_id': 'yellow',
-      'name': 'yellow',
-      'author': {
-        'name': 'foo',
-        'email': 'foo@yellow.com',
-        'twitter': 'foo'
+        '1.0.1': {},
       },
-      'readme': 'a very useful readme',
-      'versions': {
+    },
+    cyan: {
+      _npmUser: {
+        name: 'claudia',
+        email: 'claudia@cyan.com',
+      },
+      name: 'cyan',
+      'dist-tags': {
+        latest: '1.0.0',
+      },
+      versions: {
         '1.0.0': {
-          'version': '1.0.0',
-          'author': 'claudia',
-          'readme': 'a very useful readme',
-          'maintainers': [
-            { 'name': 'claudia', 'email': 'c@yellow.com', 'twitter': 'cyellow' },
-            { 'name': 'isaacs', 'email': 'i@yellow.com', 'twitter': 'iyellow' }
-          ]
+          version: '1.0.0',
+          name: 'cyan',
+          dist: {
+            shasum: '123',
+            tarball: 'http://hm.cyan.com/1.0.0.tgz',
+            integrity: '---',
+            fileCount: 1,
+            unpackedSize: 1,
+          },
+        },
+        '1.0.1': {},
+      },
+    },
+    brown: {
+      name: 'brown',
+    },
+    yellow: {
+      _id: 'yellow',
+      name: 'yellow',
+      author: {
+        name: 'foo',
+        email: 'foo@yellow.com',
+        twitter: 'foo',
+      },
+      readme: 'a very useful readme',
+      versions: {
+        '1.0.0': {
+          version: '1.0.0',
+          author: 'claudia',
+          readme: 'a very useful readme',
+          maintainers: [
+            { name: 'claudia', email: 'c@yellow.com', twitter: 'cyellow' },
+            { name: 'isaacs', email: 'i@yellow.com', twitter: 'iyellow' },
+          ],
         },
         '1.0.1': {
-          'version': '1.0.1',
-          'author': 'claudia'
+          version: '1.0.1',
+          author: 'claudia',
         },
         '1.0.2': {
-          'version': '1.0.2',
-          'author': 'claudia'
-        }
-      }
-    },
-    'purple': {
-      'name': 'purple',
-      'versions': {
-        '1.0.0': {
-          'foo': 1,
-          'maintainers': [
-            { 'name': 'claudia' }
-          ]
+          version: '1.0.2',
+          author: 'claudia',
         },
-        '1.0.1': {}
-      }
-    },
-    'green': {
-      '_id': 'green',
-      'name': 'green',
-      'dist-tags': {
-        'latest': '1.0.0'
       },
-      'maintainers': [
-        { 'name': 'claudia', 'email': 'c@yellow.com', 'twitter': 'cyellow' },
-        { 'name': 'isaacs', 'email': 'i@yellow.com', 'twitter': 'iyellow' }
+    },
+    purple: {
+      name: 'purple',
+      versions: {
+        '1.0.0': {
+          foo: 1,
+          maintainers: [
+            { name: 'claudia' },
+          ],
+        },
+        '1.0.1': {},
+      },
+    },
+    green: {
+      _id: 'green',
+      name: 'green',
+      'dist-tags': {
+        latest: '1.0.0',
+      },
+      maintainers: [
+        { name: 'claudia', email: 'c@yellow.com', twitter: 'cyellow' },
+        { name: 'isaacs', email: 'i@yellow.com', twitter: 'iyellow' },
       ],
-      'keywords': ['colors', 'green', 'crayola'],
-      'versions': {
+      keywords: ['colors', 'green', 'crayola'],
+      versions: {
         '1.0.0': {
-          '_id': 'green',
-          'version': '1.0.0',
-          'description': 'green is a very important color',
-          'bugs': {
-            'url': 'http://bugs.green.com'
+          _id: 'green',
+          version: '1.0.0',
+          description: 'green is a very important color',
+          bugs: {
+            url: 'http://bugs.green.com',
           },
-          'deprecated': true,
-          'repository': {
-            'url': 'http://repository.green.com'
+          deprecated: true,
+          repository: {
+            url: 'http://repository.green.com',
           },
-          'license': { type: 'ACME' },
-          'bin': {
-            'green': 'bin/green.js'
+          license: { type: 'ACME' },
+          bin: {
+            green: 'bin/green.js',
           },
-          'dependencies': {
-            'red': '1.0.0',
-            'yellow': '1.0.0'
+          dependencies: {
+            red: '1.0.0',
+            yellow: '1.0.0',
           },
-          'dist': {
-            'shasum': '123',
-            'tarball': 'http://hm.green.com/1.0.0.tgz',
-            'integrity': '---',
-            'fileCount': 1,
-            'unpackedSize': 1
-          }
+          dist: {
+            shasum: '123',
+            tarball: 'http://hm.green.com/1.0.0.tgz',
+            integrity: '---',
+            fileCount: 1,
+            unpackedSize: 1,
+          },
         },
-        '1.0.1': {}
-      }
-    },
-    'black': {
-      'name': 'black',
-      'dist-tags': {
-        'latest': '1.0.0'
+        '1.0.1': {},
       },
-      'versions': {
+    },
+    black: {
+      name: 'black',
+      'dist-tags': {
+        latest: '1.0.0',
+      },
+      versions: {
         '1.0.0': {
-          'version': '1.0.0',
-          'bugs': 'http://bugs.black.com',
-          'license': {},
-          'dependencies': (() => {
+          version: '1.0.0',
+          bugs: 'http://bugs.black.com',
+          license: {},
+          dependencies: (() => {
             const deps = {}
-            for (i = 0; i < 25; i++) {
+            for (let i = 0; i < 25; i++)
               deps[i] = '1.0.0'
-            }
+
             return deps
           })(),
-          'dist': {
-            'shasum': '123',
-            'tarball': 'http://hm.black.com/1.0.0.tgz',
-            'integrity': '---',
-            'fileCount': 1,
-            'unpackedSize': 1
-          }
+          dist: {
+            shasum: '123',
+            tarball: 'http://hm.black.com/1.0.0.tgz',
+            integrity: '---',
+            fileCount: 1,
+            unpackedSize: 1,
+          },
         },
-        '1.0.1': {}
-      }
-    },
-    'pink': {
-      'name': 'pink',
-      'dist-tags': {
-        'latest': '1.0.0'
+        '1.0.1': {},
       },
-      'versions': {
+    },
+    pink: {
+      name: 'pink',
+      'dist-tags': {
+        latest: '1.0.0',
+      },
+      versions: {
         '1.0.0': {
-          'version': '1.0.0',
-          'maintainers': [
-            { 'name': 'claudia', 'url': 'http://c.pink.com' },
-            { 'name': 'isaacs', 'url': 'http://i.pink.com'  }
+          version: '1.0.0',
+          maintainers: [
+            { name: 'claudia', url: 'http://c.pink.com' },
+            { name: 'isaacs', url: 'http://i.pink.com' },
           ],
-          'repository': 'http://repository.pink.com',
-          'license': {},
-          'dist': {
-            'shasum': '123',
-            'tarball': 'http://hm.pink.com/1.0.0.tgz',
-            'integrity': '---',
-            'fileCount': 1,
-            'unpackedSize': 1
-          }
+          repository: 'http://repository.pink.com',
+          license: {},
+          dist: {
+            shasum: '123',
+            tarball: 'http://hm.pink.com/1.0.0.tgz',
+            integrity: '---',
+            fileCount: 1,
+            unpackedSize: 1,
+          },
         },
-        '1.0.1': {}
-      }
-    },
-    'orange': {
-      'name': 'orange',
-      'dist-tags': {
-        'latest': '1.0.0'
+        '1.0.1': {},
       },
-      'versions': {
+    },
+    orange: {
+      name: 'orange',
+      'dist-tags': {
+        latest: '1.0.0',
+      },
+      versions: {
         '1.0.0': {
-          'version': '1.0.0',
-          'homepage': 'http://hm.orange.com',
-          'license': {},
-          'dist': {
-            'shasum': '123',
-            'tarball': 'http://hm.orange.com/1.0.0.tgz',
-            'integrity': '---',
-            'fileCount': 1,
-            'unpackedSize': 1
-          }
+          version: '1.0.0',
+          homepage: 'http://hm.orange.com',
+          license: {},
+          dist: {
+            shasum: '123',
+            tarball: 'http://hm.orange.com/1.0.0.tgz',
+            integrity: '---',
+            fileCount: 1,
+            unpackedSize: 1,
+          },
         },
-        '1.0.1': {}
-      }
-    }
+        '1.0.1': {},
+      },
+    },
   }
+  if (nv.type === 'git')
+    return mocks[nv.hosted.project]
   return mocks[nv.name]
 }
 
 t.beforeEach(cleanLogs)
+
 t.test('should log package info', t => {
-  const view = requireInject('../../lib/view.js', {
-    '../../lib/npm.js': {
-      flatOptions: {
-        global: false,
-      }
+  const View = t.mock('../../lib/view.js', {
+    pacote: {
+      packument,
     },
-    'pacote': {
-      packument
-    }
   })
-
-  const viewJson = requireInject('../../lib/view.js', {
-    '../../lib/npm.js': {
-      flatOptions: {
-        json: true
-      }
-    },
-    'pacote': {
-      packument
-    }
+  const npm = mockNpm({
+    config: { unicode: false },
   })
+  const view = new View(npm)
 
-  const viewUnicode = requireInject('../../lib/view.js', {
-    '../../lib/npm.js': {
-      flatOptions: {
-        global: false,
-        unicode: true
-      }
+  const ViewJson = t.mock('../../lib/view.js', {
+    pacote: {
+      packument,
     },
-    'pacote': {
-      packument
-    }
+  })
+  const jsonNpm = mockNpm({
+    config: {
+      json: true,
+      tag: 'latest',
+    },
+  })
+  const viewJson = new ViewJson(jsonNpm)
+
+  const ViewUnicode = t.mock('../../lib/view.js', {
+    pacote: {
+      packument,
+    },
+  })
+  const unicodeNpm = mockNpm({
+    config: { unicode: true },
+  })
+  const viewUnicode = new ViewUnicode(unicodeNpm)
+
+  t.test('package from git', t => {
+    view.exec(['https://github.com/npm/green'], () => {
+      t.matchSnapshot(logs)
+      t.end()
+    })
   })
 
   t.test('package with license, bugs, repository and other fields', t => {
-    view(['green@1.0.0'], () => {
+    view.exec(['green@1.0.0'], () => {
       t.matchSnapshot(logs)
       t.end()
     })
   })
 
   t.test('package with more than 25 deps', t => {
-    view(['black@1.0.0'], () => {
+    view.exec(['black@1.0.0'], () => {
       t.matchSnapshot(logs)
       t.end()
     })
   })
 
   t.test('package with maintainers info as object', t => {
-    view(['pink@1.0.0'], () => {
+    view.exec(['pink@1.0.0'], () => {
       t.matchSnapshot(logs)
       t.end()
     })
   })
 
   t.test('package with homepage', t => {
-    view(['orange@1.0.0'], () => {
+    view.exec(['orange@1.0.0'], () => {
       t.matchSnapshot(logs)
       t.end()
     })
   })
 
   t.test('package with no versions', t => {
-    view(['brown'], () => {
-      t.equals(logs, '', 'no info to display')
+    view.exec(['brown'], () => {
+      t.equal(logs, '', 'no info to display')
       t.end()
     })
   })
 
   t.test('package with no repo or homepage', t => {
-    view(['blue@1.0.0'], () => {
+    view.exec(['blue@1.0.0'], () => {
       t.matchSnapshot(logs)
       t.end()
     })
   })
 
   t.test('package with no modified time', t => {
-    viewUnicode(['cyan@1.0.0'], () => {
+    viewUnicode.exec(['cyan@1.0.0'], () => {
       t.matchSnapshot(logs)
       t.end()
     })
   })
 
   t.test('package with --json and semver range', t => {
-    viewJson(['cyan@^1.0.0'], () => {
+    viewJson.exec(['cyan@^1.0.0'], () => {
       t.matchSnapshot(logs)
       t.end()
     })
   })
 
   t.test('package with --json and no versions', t => {
-    viewJson(['brown'], () => {
-      t.equals(logs, '', 'no info to display')
+    viewJson.exec(['brown'], () => {
+      t.equal(logs, '', 'no info to display')
       t.end()
     })
   })
@@ -344,32 +358,32 @@ t.test('should log info of package in current working dir', t => {
   const testDir = t.testdir({
     'package.json': JSON.stringify({
       name: 'blue',
-      version: '1.0.0'
-    }, null, 2)
+      version: '1.0.0',
+    }, null, 2),
   })
 
-  const view = requireInject('../../lib/view.js', {
-    '../../lib/npm.js': {
-      prefix: testDir,
-      flatOptions: {
-        defaultTag: '1.0.0',
-        global: false
-      }
+  const View = t.mock('../../lib/view.js', {
+    pacote: {
+      packument,
     },
-    'pacote': {
-      packument
-    }
   })
+  const npm = mockNpm({
+    prefix: testDir,
+    config: {
+      tag: '1.0.0',
+    },
+  })
+  const view = new View(npm)
 
   t.test('specific version', t => {
-    view(['.@1.0.0'], () => {
+    view.exec(['.@1.0.0'], () => {
       t.matchSnapshot(logs)
       t.end()
     })
   })
 
   t.test('non-specific version', t => {
-    view(['.'], () => {
+    view.exec(['.'], () => {
       t.matchSnapshot(logs)
       t.end()
     })
@@ -379,87 +393,86 @@ t.test('should log info of package in current working dir', t => {
 })
 
 t.test('should log info by field name', t => {
-  const viewJson = requireInject('../../lib/view.js', {
-    '../../lib/npm.js': {
-      flatOptions: {
-        json: true,
-        global: false
-      }
+  const ViewJson = t.mock('../../lib/view.js', {
+    pacote: {
+      packument,
     },
-    'pacote': {
-      packument
-    }
+  })
+  const jsonNpm = mockNpm({
+    config: {
+      tag: 'latest',
+      json: true,
+    },
   })
 
-  const view = requireInject('../../lib/view.js', {
-    '../../lib/npm.js': {
-      flatOptions: {
-        global: false
-      }
+  const viewJson = new ViewJson(jsonNpm)
+
+  const View = t.mock('../../lib/view.js', {
+    pacote: {
+      packument,
     },
-    'pacote': {
-      packument
-    }
   })
+  const npm = mockNpm()
+  const view = new View(npm)
 
   t.test('readme', t => {
-    view(['yellow@1.0.0', 'readme'], () => {
+    view.exec(['yellow@1.0.0', 'readme'], () => {
       t.matchSnapshot(logs)
       t.end()
     })
   })
 
   t.test('several fields', t => {
-    viewJson(['yellow@1.0.0', 'name', 'version', 'foo[bar]'], () => {
+    viewJson.exec(['yellow@1.0.0', 'name', 'version', 'foo[bar]'], () => {
       t.matchSnapshot(logs)
       t.end()
     })
   })
 
   t.test('several fields with several versions', t => {
-    view(['yellow@1.x.x', 'author'], () => {
+    view.exec(['yellow@1.x.x', 'author'], () => {
       t.matchSnapshot(logs)
       t.end()
     })
   })
 
   t.test('nested field with brackets', t => {
-    viewJson(['orange@1.0.0', 'dist[shasum]'], () => {
+    viewJson.exec(['orange@1.0.0', 'dist[shasum]'], () => {
       t.matchSnapshot(logs)
       t.end()
     })
   })
 
   t.test('maintainers with email', t => {
-    viewJson(['yellow@1.0.0', 'maintainers', 'name'], () => {
+    viewJson.exec(['yellow@1.0.0', 'maintainers', 'name'], () => {
       t.matchSnapshot(logs)
       t.end()
     })
   })
 
   t.test('maintainers with url', t => {
-    viewJson(['pink@1.0.0', 'maintainers'], () => {
+    viewJson.exec(['pink@1.0.0', 'maintainers'], () => {
       t.matchSnapshot(logs)
       t.end()
     })
   })
 
   t.test('unknown nested field ', t => {
-    view(['yellow@1.0.0', 'dist.foobar'], () => {
-      t.equals(logs, '', 'no info to display')
+    view.exec(['yellow@1.0.0', 'dist.foobar'], () => {
+      t.equal(logs, '', 'no info to display')
       t.end()
     })
   })
 
   t.test('array field - 1 element', t => {
-    view(['purple@1.0.0',  'maintainers.name'], () => {
+    view.exec(['purple@1.0.0', 'maintainers.name'], () => {
       t.matchSnapshot(logs)
       t.end()
     })
   })
 
   t.test('array field - 2 elements', t => {
-    view(['yellow@1.x.x',  'maintainers.name'], () => {
+    view.exec(['yellow@1.x.x', 'maintainers.name'], () => {
       t.matchSnapshot(logs)
       t.end()
     })
@@ -469,15 +482,16 @@ t.test('should log info by field name', t => {
 })
 
 t.test('throw error if global mode', (t) => {
-  const view = requireInject('../../lib/view.js', {
-    '../../lib/npm.js': {
-      flatOptions: {
-        global: true
-      }
-    }
+  const View = t.mock('../../lib/view.js')
+  const npm = mockNpm({
+    config: {
+      global: true,
+      tag: 'latest',
+    },
   })
-  view([], (err) => {
-    t.equals(err.message, 'Cannot use view command in global mode.')
+  const view = new View(npm)
+  view.exec([], (err) => {
+    t.equal(err.message, 'Cannot use view command in global mode.')
     t.end()
   })
 })
@@ -485,15 +499,12 @@ t.test('throw error if global mode', (t) => {
 t.test('throw ENOENT error if package.json misisng', (t) => {
   const testDir = t.testdir({})
 
-  const view = requireInject('../../lib/view.js', {
-    '../../lib/npm.js': {
-      prefix: testDir,
-      flatOptions: {
-        global: false
-      }
-    }
+  const View = t.mock('../../lib/view.js')
+  const npm = mockNpm({
+    prefix: testDir,
   })
-  view([], (err) => {
+  const view = new View(npm)
+  view.exec([], (err) => {
     t.match(err, { code: 'ENOENT' })
     t.end()
   })
@@ -501,18 +512,15 @@ t.test('throw ENOENT error if package.json misisng', (t) => {
 
 t.test('throw EJSONPARSE error if package.json not json', (t) => {
   const testDir = t.testdir({
-    'package.json': 'not json, nope, not even a little bit!'
+    'package.json': 'not json, nope, not even a little bit!',
   })
 
-  const view = requireInject('../../lib/view.js', {
-    '../../lib/npm.js': {
-      prefix: testDir,
-      flatOptions: {
-        global: false
-      }
-    }
+  const View = t.mock('../../lib/view.js')
+  const npm = mockNpm({
+    prefix: testDir,
   })
-  view([], (err) => {
+  const view = new View(npm)
+  view.exec([], (err) => {
     t.match(err, { code: 'EJSONPARSE' })
     t.end()
   })
@@ -520,74 +528,191 @@ t.test('throw EJSONPARSE error if package.json not json', (t) => {
 
 t.test('throw error if package.json has no name', (t) => {
   const testDir = t.testdir({
-    'package.json': '{}'
+    'package.json': '{}',
   })
 
-  const view = requireInject('../../lib/view.js', {
-    '../../lib/npm.js': {
-      prefix: testDir,
-      flatOptions: {
-        global: false
-      }
-    }
+  const View = t.mock('../../lib/view.js')
+  const npm = mockNpm({
+    prefix: testDir,
   })
-  view([], (err) => {
-    t.equals(err.message, 'Invalid package.json, no "name" field')
+  const view = new View(npm)
+  view.exec([], (err) => {
+    t.equal(err.message, 'Invalid package.json, no "name" field')
     t.end()
   })
 })
 
 t.test('throws when unpublished', (t) => {
-  const view = requireInject('../../lib/view.js', {
-    '../../lib/npm.js': {
-      flatOptions: {
-        defaultTag: '1.0.1',
-        global: false
-      }
+  const View = t.mock('../../lib/view.js', {
+    pacote: {
+      packument,
     },
-    'pacote': {
-      packument
-    }
   })
-  view(['red'], (err) => {
-    t.equals(err.code, 'E404')
-    t.end()
-  })
-})
-
-t.test('completion', (t) => {
-  const view = requireInject('../../lib/view.js', {
-    '../../lib/npm.js': {
-      flatOptions: {
-        defaultTag: '1.0.1',
-        global: false
-      }
+  const npm = mockNpm({
+    config: {
+      tag: '1.0.1',
     },
-    'pacote': {
-      packument
-    }
   })
-  view.completion({
-    conf: { argv: { remain: ['npm', 'view', 'green@1.0.0'] } }
-  }, (err, res) => {
-    t.ok(res, 'returns back fields')
+  const view = new View(npm)
+  view.exec(['red'], (err) => {
+    t.equal(err.code, 'E404')
     t.end()
   })
 })
 
-t.test('no registry completion', (t) => {
-  const view = requireInject('../../lib/view.js', {
-    '../../lib/npm.js': {
-      flatOptions: {
-        defaultTag: '1.0.1',
-      }
-    }
+t.test('workspaces', t => {
+  t.beforeEach(() => {
+    warnMsg = undefined
+    config.json = false
   })
-  view.completion({
-    conf: { argv: { remain: ['npm', 'view'] } }
-  }, (err) => {
-    t.notOk(err, 'there is no package completion')
-    t.end()
+  const testDir = t.testdir({
+    'package.json': JSON.stringify({
+      name: 'workspaces-test-package',
+      version: '1.2.3',
+      workspaces: ['test-workspace-a', 'test-workspace-b'],
+    }),
+    'test-workspace-a': {
+      'package.json': JSON.stringify({
+        name: 'green',
+        version: '1.2.3',
+      }),
+    },
+    'test-workspace-b': {
+      'package.json': JSON.stringify({
+        name: 'orange',
+        version: '1.2.3',
+      }),
+    },
   })
+  const View = t.mock('../../lib/view.js', {
+    pacote: {
+      packument,
+    },
+  })
+  const config = {
+    unicode: false,
+    tag: 'latest',
+  }
+  let warnMsg
+  const npm = mockNpm({
+    log: {
+      warn: (msg) => {
+        warnMsg = msg
+      },
+    },
+    config,
+    localPrefix: testDir,
+  })
+  const view = new View(npm)
+
+  t.test('all workspaces', t => {
+    view.execWorkspaces([], [], (err) => {
+      t.error(err)
+      t.matchSnapshot(logs)
+      t.end()
+    })
+  })
+
+  t.test('one specific workspace', t => {
+    view.execWorkspaces([], ['green'], (err) => {
+      t.error(err)
+      t.matchSnapshot(logs)
+      t.end()
+    })
+  })
+
+  t.test('all workspaces --json', t => {
+    config.json = true
+    view.execWorkspaces([], [], (err) => {
+      t.error(err)
+      t.matchSnapshot(logs)
+      t.end()
+    })
+  })
+
+  t.test('all workspaces single field', t => {
+    view.execWorkspaces(['.', 'name'], [], (err) => {
+      t.error(err)
+      t.matchSnapshot(logs)
+      t.end()
+    })
+  })
+
+  t.test('all workspaces nonexistent field', t => {
+    view.execWorkspaces(['.', 'foo'], [], (err) => {
+      t.error(err)
+      t.matchSnapshot(logs)
+      t.end()
+    })
+  })
+
+  t.test('all workspaces nonexistent field --json', t => {
+    config.json = true
+    view.execWorkspaces(['.', 'foo'], [], (err) => {
+      t.error(err)
+      t.matchSnapshot(logs)
+      t.end()
+    })
+  })
+
+  t.test('all workspaces single field --json', t => {
+    config.json = true
+    view.execWorkspaces(['.', 'name'], [], (err) => {
+      t.error(err)
+      t.matchSnapshot(logs)
+      t.end()
+    })
+  })
+
+  t.test('single workspace --json', t => {
+    config.json = true
+    view.execWorkspaces([], ['green'], (err) => {
+      t.error(err)
+      t.matchSnapshot(logs)
+      t.end()
+    })
+  })
+
+  t.test('remote package name', t => {
+    view.execWorkspaces(['pink'], [], (err) => {
+      t.error(err)
+      t.matchSnapshot(warnMsg)
+      t.matchSnapshot(logs)
+      t.end()
+    })
+  })
+
+  t.end()
 })
 
+t.test('completion', async t => {
+  const View = t.mock('../../lib/view.js', {
+    pacote: {
+      packument,
+    },
+  })
+  const npm = mockNpm({
+    config: {
+      tag: '1.0.1',
+    },
+  })
+  const view = new View(npm)
+  const res = await view.completion({
+    conf: { argv: { remain: ['npm', 'view', 'green@1.0.0'] } },
+  })
+  t.ok(res, 'returns back fields')
+  t.end()
+})
+
+t.test('no registry completion', async t => {
+  const View = t.mock('../../lib/view.js')
+  const npm = mockNpm({
+    config: {
+      tag: '1.0.1',
+    },
+  })
+  const view = new View(npm)
+  const res = await view.completion({conf: { argv: { remain: ['npm', 'view'] } } })
+  t.notOk(res, 'there is no package completion')
+  t.end()
+})

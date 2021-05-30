@@ -1,7 +1,7 @@
 -include config.mk
 
 BUILDTYPE ?= Release
-PYTHON ?= python
+PYTHON ?= python3
 DESTDIR ?=
 SIGN ?=
 PREFIX ?= /usr/local
@@ -9,7 +9,8 @@ FLAKY_TESTS ?= run
 TEST_CI_ARGS ?=
 STAGINGSERVER ?= node-www
 LOGLEVEL ?= silent
-OSTYPE := $(shell uname -s | tr '[A-Z]' '[a-z]')
+OSTYPE := $(shell uname -s | tr '[:upper:]' '[:lower:]')
+ARCHTYPE := $(shell uname -m | tr '[:upper:]' '[:lower:]')
 COVTESTS ?= test-cov
 COV_SKIP_TESTS ?= core_line_numbers.js,testFinalizer.js,test_function/test.js
 GTEST_FILTER ?= "*"
@@ -40,7 +41,7 @@ ifeq ($(OSTYPE), darwin)
 	GCOV = xcrun llvm-cov gcov
 endif
 
-BUILDTYPE_LOWER := $(shell echo $(BUILDTYPE) | tr '[A-Z]' '[a-z]')
+BUILDTYPE_LOWER := $(shell echo $(BUILDTYPE) | tr '[:upper:]' '[:lower:]')
 
 # Determine EXEEXT
 EXEEXT := $(shell $(PYTHON) -c \
@@ -65,8 +66,8 @@ V ?= 0
 available-node = \
 	if [ -x $(PWD)/$(NODE) ] && [ -e $(PWD)/$(NODE) ]; then \
 		$(PWD)/$(NODE) $(1); \
-	elif [ -x `which node` ] && [ -e `which node` ] && [ `which node` ]; then \
-		`which node` $(1); \
+	elif [ -x `command -v node` ] && [ -e `command -v node` ] && [ `command -v node` ]; then \
+		`command -v node` $(1); \
 	else \
 		echo "No available node, cannot run \"node $(1)\""; \
 		exit 1; \
@@ -85,7 +86,7 @@ endif
 # To add a target to the help, add a double comment (##) on the target line.
 help: ## Print help for targets with comments.
 	@printf "For more targets and info see the comments in the Makefile.\n\n"
-	@grep -E '^[a-zA-Z0-9._-]+:.*?## .*$$' Makefile | sort | \
+	@grep -E '^[[:alnum:]._-]+:.*?## .*$$' Makefile | sort | \
 		awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-15s\033[0m %s\n", $$1, $$2}'
 
 # The .PHONY is needed to ensure that we recursively use the out/Makefile
@@ -102,7 +103,7 @@ $(NODE_EXE): build_type:=Release
 $(NODE_G_EXE): build_type:=Debug
 $(NODE_EXE) $(NODE_G_EXE): config.gypi out/Makefile
 	$(MAKE) -C out BUILDTYPE=${build_type} V=$(V)
-	if [ ! -r $@ -o ! -L $@ ]; then \
+	if [ ! -r $@ ] || [ ! -L $@ ]; then \
 	  ln -fs out/${build_type}/$(NODE_EXE) $@; fi
 else
 ifeq ($(BUILD_WITH), ninja)
@@ -116,11 +117,11 @@ else
 endif
 $(NODE_EXE): config.gypi out/Release/build.ninja
 	ninja -C out/Release $(NINJA_ARGS)
-	if [ ! -r $@ -o ! -L $@ ]; then ln -fs out/Release/$(NODE_EXE) $@; fi
+	if [ ! -r $@ ] || [ ! -L $@ ]; then ln -fs out/Release/$(NODE_EXE) $@; fi
 
 $(NODE_G_EXE): config.gypi out/Debug/build.ninja
 	ninja -C out/Debug $(NINJA_ARGS)
-	if [ ! -r $@ -o ! -L $@ ]; then ln -fs out/Debug/$(NODE_EXE) $@; fi
+	if [ ! -r $@ ] || [ ! -L $@ ]; then ln -fs out/Debug/$(NODE_EXE) $@; fi
 else
 $(NODE_EXE) $(NODE_G_EXE):
 	$(warning This Makefile currently only supports building with 'make' or 'ninja')
@@ -243,10 +244,10 @@ coverage-test: coverage-build
 		--gcov-exclude='.*\b(deps|usr|out|cctest|embedding)\b' -v \
 		-r Release/obj.target --html --html-detail -o ../coverage/cxxcoverage.html \
 		--gcov-executable="$(GCOV)")
-	@echo -n "Javascript coverage %: "
+	@printf "Javascript coverage %%: "
 	@grep -B1 Lines coverage/index.html | head -n1 \
 		| sed 's/<[^>]*>//g'| sed 's/ //g'
-	@echo -n "C++ coverage %: "
+	@printf "C++ coverage %%: "
 	@grep -A3 Lines coverage/cxxcoverage.html | grep style  \
 		| sed 's/<[^>]*>//g'| sed 's/ //g'
 
@@ -477,7 +478,7 @@ JS_SUITES ?= default
 NATIVE_SUITES ?= addons js-native-api node-api
 # CI_* variables should be kept synchronized with the ones in vcbuild.bat
 CI_NATIVE_SUITES ?= $(NATIVE_SUITES) benchmark
-CI_JS_SUITES ?= $(JS_SUITES)
+CI_JS_SUITES ?= $(JS_SUITES) pummel
 ifeq ($(node_use_openssl), false)
 	CI_DOC := doctool
 else
@@ -564,10 +565,6 @@ test-pummel: all
 test-internet: all
 	$(PYTHON) tools/test.py $(PARALLEL_ARGS) internet
 
-test-node-inspect: $(NODE_EXE)
-	USE_EMBEDDED_NODE_INSPECT=1 $(NODE) tools/test-npm-package \
-		--install deps/node-inspect test
-
 test-benchmark: | bench-addons-build
 	$(PYTHON) tools/test.py $(PARALLEL_ARGS) benchmark
 
@@ -588,12 +585,17 @@ test-doc: doc-only lint-md ## Builds, lints, and verifies the docs.
 	fi
 	$(NODE) tools/doc/checkLinks.js .
 
+.PHONY: test-doc-ci
+test-doc-ci: doc-only
+	$(PYTHON) tools/test.py --shell $(NODE) $(TEST_CI_ARGS) $(PARALLEL_ARGS) doctool
+	$(NODE) tools/doc/checkLinks.js .
+
 test-known-issues: all
 	$(PYTHON) tools/test.py $(PARALLEL_ARGS) known_issues
 
 # Related CI job: node-test-npm
 test-npm: $(NODE_EXE) ## Run the npm test suite on deps/npm.
-	$(NODE) tools/test-npm-package --install --logfile=test-npm.tap deps/npm test-node
+	$(NODE) tools/test-npm-package --install --logfile=test-npm.tap deps/npm test
 
 test-npm-publish: $(NODE_EXE)
 	npm_package_config_publishtest=true $(NODE) deps/npm/test/run.js
@@ -696,7 +698,7 @@ doc-only: tools/doc/node_modules \
 	@if [ "$(shell $(node_use_openssl))" != "true" ]; then \
 		echo "Skipping doc-only (no crypto)"; \
 	else \
-		$(MAKE) out/doc/api/all.html out/doc/api/all.json; \
+		$(MAKE) out/doc/api/all.html out/doc/api/all.json out/doc/api/stability; \
 	fi
 
 .PHONY: doc
@@ -749,6 +751,10 @@ out/doc/api/all.html: $(apidocs_html) tools/doc/allhtml.js \
 out/doc/api/all.json: $(apidocs_json) tools/doc/alljson.js | out/doc/api
 	$(call available-node, tools/doc/alljson.js)
 
+.PHONY: out/doc/api/stability
+out/doc/api/stability: out/doc/api/all.json tools/doc/stability.js | out/doc/api
+	$(call available-node, tools/doc/stability.js)
+
 .PHONY: docopen
 docopen: out/doc/api/all.html
 	@$(PYTHON) -mwebbrowser file://$(abspath $<)
@@ -764,6 +770,7 @@ docclean:
 
 RAWVER=$(shell $(PYTHON) tools/getnodeversion.py)
 VERSION=v$(RAWVER)
+CHANGELOG=doc/changelogs/CHANGELOG_V$(firstword $(subst ., ,$(RAWVER))).md
 
 # For nightly builds, you must set DISTTYPE to "nightly", "next-nightly" or
 # "custom". For the nightly and next-nightly case, you need to set DATESTRING
@@ -898,10 +905,10 @@ BINARYNAME=$(TARNAME)-$(PLATFORM)-$(ARCH)
 endif
 BINARYTAR=$(BINARYNAME).tar
 # OSX doesn't have xz installed by default, http://macpkg.sourceforge.net/
-HAS_XZ ?= $(shell which xz > /dev/null 2>&1; [ $$? -eq 0 ] && echo 1 || echo 0)
+HAS_XZ ?= $(shell command -v xz > /dev/null 2>&1; [ $$? -eq 0 ] && echo 1 || echo 0)
 # Supply SKIP_XZ=1 to explicitly skip .tar.xz creation
 SKIP_XZ ?= 0
-XZ = $(shell [ $(HAS_XZ) -eq 1 -a $(SKIP_XZ) -eq 0 ] && echo 1 || echo 0)
+XZ = $(shell [ $(HAS_XZ) -eq 1 ] && [ $(SKIP_XZ) -eq 0 ] && echo 1 || echo 0)
 XZ_COMPRESSION ?= 9e
 PKG=$(TARNAME).pkg
 MACOSOUTDIR=out/macos
@@ -942,7 +949,7 @@ release-only: check-xz
 		echo "" >&2 ; \
 		exit 1 ; \
 	fi
-	@if [ "$(DISTTYPE)" != "release" -o "$(RELEASE)" = "1" ]; then \
+	@if [ "$(DISTTYPE)" != "release" ] || [ "$(RELEASE)" = "1" ]; then \
 		exit 0; \
 	else \
 		echo "" >&2 ; \
@@ -951,8 +958,27 @@ release-only: check-xz
 		echo "" >&2 ; \
 		exit 1 ; \
 	fi
+	@if [ "$(RELEASE)" = "0" ] || [ -f "$(CHANGELOG)" ]; then \
+		exit 0; \
+	else \
+		echo "" >&2 ; \
+		echo "#NODE_VERSION_IS_RELEASE is set to $(RELEASE) but " >&2 ; \
+		echo "$(CHANGELOG) does not exist." >&2 ; \
+		echo "" >&2 ; \
+		exit 1 ; \
+	fi
 
 $(PKG): release-only
+# pkg building is currently only supported on an ARM64 macOS host for
+# ease of compiling fat-binaries for both macOS architectures.
+ifneq ($(OSTYPE),darwin)
+	$(warning Invalid OSTYPE)
+	$(error OSTYPE should be `darwin` currently is $(OSTYPE))
+endif 
+ifneq ($(ARCHTYPE),arm64)
+	$(warning Invalid ARCHTYPE)
+	$(error ARCHTYPE should be `arm64` currently is $(ARCHTYPE))
+endif
 	$(RM) -r $(MACOSOUTDIR)
 	mkdir -p $(MACOSOUTDIR)/installer/productbuild
 	cat tools/macos-installer/productbuild/distribution.xml.tmpl  \
@@ -973,14 +999,28 @@ $(PKG): release-only
 			| sed -E "s/\\{npmversion\\}/$(NPMVERSION)/g"  \
 		>$(MACOSOUTDIR)/installer/productbuild/Resources/$$lang/conclusion.html ; \
 	done
+	CC_host="cc -arch x86_64" CXX_host="c++ -arch x86_64"  \
+	CC_target="cc -arch x86_64" CXX_target="c++ -arch x86_64" \
+	CC="cc -arch x86_64" CXX="c++ -arch x86_64" $(PYTHON) ./configure \
+		--dest-cpu=x86_64 \
+		--tag=$(TAG) \
+		--release-urlbase=$(RELEASE_URLBASE) \
+		$(CONFIG_FLAGS) $(BUILD_RELEASE_FLAGS)
+	arch -x86_64 $(MAKE) install V=$(V) DESTDIR=$(MACOSOUTDIR)/dist/x64/node
+	SIGN="$(CODESIGN_CERT)" PKGDIR="$(MACOSOUTDIR)/dist/x64/node/usr/local" sh \
+		tools/osx-codesign.sh
 	$(PYTHON) ./configure \
-		--dest-cpu=x64 \
+		--dest-cpu=arm64 \
 		--tag=$(TAG) \
 		--release-urlbase=$(RELEASE_URLBASE) \
 		$(CONFIG_FLAGS) $(BUILD_RELEASE_FLAGS)
 	$(MAKE) install V=$(V) DESTDIR=$(MACOSOUTDIR)/dist/node
-	SIGN="$(CODESIGN_CERT)" PKGDIR="$(MACOSOUTDIR)/dist/node/usr/local" bash \
+	SIGN="$(CODESIGN_CERT)" PKGDIR="$(MACOSOUTDIR)/dist/node/usr/local" sh \
 		tools/osx-codesign.sh
+	lipo $(MACOSOUTDIR)/dist/x64/node/usr/local/bin/node \
+		$(MACOSOUTDIR)/dist/node/usr/local/bin/node \
+		-output $(MACOSOUTDIR)/dist/node/usr/local/bin/node \
+		-create
 	mkdir -p $(MACOSOUTDIR)/dist/npm/usr/local/lib/node_modules
 	mkdir -p $(MACOSOUTDIR)/pkgs
 	mv $(MACOSOUTDIR)/dist/node/usr/local/lib/node_modules/npm \
@@ -1001,8 +1041,8 @@ $(PKG): release-only
 	productbuild --distribution $(MACOSOUTDIR)/installer/productbuild/distribution.xml \
 		--resources $(MACOSOUTDIR)/installer/productbuild/Resources \
 		--package-path $(MACOSOUTDIR)/pkgs ./$(PKG)
-	SIGN="$(PRODUCTSIGN_CERT)" PKG="$(PKG)" bash tools/osx-productsign.sh
-	bash tools/osx-notarize.sh $(FULLVERSION)
+	SIGN="$(PRODUCTSIGN_CERT)" PKG="$(PKG)" sh tools/osx-productsign.sh
+	sh tools/osx-notarize.sh $(FULLVERSION)
 
 .PHONY: pkg
 # Builds the macOS installer for releases.
@@ -1118,9 +1158,13 @@ $(BINARYTAR): release-only
 	$(MAKE) install DESTDIR=$(BINARYNAME) V=$(V) PORTABLE=1
 	cp README.md $(BINARYNAME)
 	cp LICENSE $(BINARYNAME)
+ifeq ("$(wildcard $(CHANGELOG))","")
 	cp CHANGELOG.md $(BINARYNAME)
+else
+	cp $(CHANGELOG) $(BINARYNAME)/CHANGELOG.md
+endif
 ifeq ($(OSTYPE),darwin)
-	SIGN="$(CODESIGN_CERT)" PKGDIR="$(BINARYNAME)" bash tools/osx-codesign.sh
+	SIGN="$(CODESIGN_CERT)" PKGDIR="$(BINARYNAME)" sh tools/osx-codesign.sh
 endif
 	tar -cf $(BINARYNAME).tar $(BINARYNAME)
 	$(RM) -r $(BINARYNAME)
@@ -1200,7 +1244,7 @@ lint-md: lint-js-doc | tools/.mdlintstamp
 LINT_JS_TARGETS = .eslintrc.js benchmark doc lib test tools
 
 run-lint-js = tools/node_modules/eslint/bin/eslint.js --cache \
-	--report-unused-disable-directives --ext=$(EXTENSIONS) $(LINT_JS_TARGETS)
+	--report-unused-disable-directives $(LINT_JS_TARGETS)
 run-lint-js-fix = $(run-lint-js) --fix
 
 .PHONY: lint-js-fix
@@ -1211,8 +1255,7 @@ lint-js-fix:
 .PHONY: lint-js-doc
 # Note that on the CI `lint-js-ci` is run instead.
 # Lints the JavaScript code with eslint.
-lint-js lint-js-fix: EXTENSIONS=.js,.mjs,.md
-lint-js-doc: EXTENSIONS=.md
+lint-js-doc: LINT_JS_TARGETS=doc
 lint-js lint-js-doc:
 	@if [ "$(shell $(node_use_openssl))" != "true" ]; then \
 		echo "Skipping $@ (no crypto)"; \
@@ -1225,7 +1268,7 @@ jslint: lint-js
 	$(warning Please use lint-js instead of jslint)
 
 run-lint-js-ci = tools/node_modules/eslint/bin/eslint.js \
-  --report-unused-disable-directives --ext=.js,.mjs,.md -f tap \
+  --report-unused-disable-directives -f tap \
 	-o test-eslint.tap $(LINT_JS_TARGETS)
 
 .PHONY: lint-js-ci
@@ -1346,7 +1389,7 @@ lint-py:
 	PYTHONPATH=tools/pip $(PYTHON) -m flake8 --count --show-source --statistics .
 else
 lint-py:
-	$(warning Python linting with flake8 is not avalible)
+	$(warning Python linting with flake8 is not available)
 	$(warning Run 'make lint-py-build')
 endif
 
@@ -1360,7 +1403,7 @@ lint: ## Run JS, C++, MD and doc linters.
 	$(MAKE) lint-addon-docs || EXIT_STATUS=$$? ; \
 	$(MAKE) lint-md || EXIT_STATUS=$$? ; \
 	exit $$EXIT_STATUS
-CONFLICT_RE=^>>>>>>> [0-9A-Fa-f]+|^<<<<<<< [A-Za-z]+
+CONFLICT_RE=^>>>>>>> [[:xdigit:]]+|^<<<<<<< [[:alpha:]]+
 
 # Related CI job: node-test-linter
 lint-ci: lint-js-ci lint-cpp lint-py lint-md lint-addon-docs
@@ -1383,7 +1426,7 @@ lint-clean:
 	$(RM) tools/.*lintstamp
 	$(RM) .eslintcache
 
-HAS_DOCKER ?= $(shell which docker > /dev/null 2>&1; [ $$? -eq 0 ] && echo 1 || echo 0)
+HAS_DOCKER ?= $(shell command -v docker > /dev/null 2>&1; [ $$? -eq 0 ] && echo 1 || echo 0)
 
 ifeq ($(HAS_DOCKER), 1)
 DOCKER_COMMAND ?= docker run -it -v $(PWD):/node

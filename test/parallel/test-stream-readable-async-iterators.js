@@ -62,8 +62,7 @@ async function tests() {
     });
 
     await (async () => {
-      for await (const d of readable) {
-        d;
+      for await (const d of readable) { // eslint-disable-line no-unused-vars
         return;
       }
     })();
@@ -595,9 +594,7 @@ async function tests() {
       }
     });
 
-    for await (const chunk of r) {
-      chunk;
-    }
+    for await (const chunk of r) {} // eslint-disable-line no-unused-vars
     assert.strictEqual(r.destroyed, false);
   }
 
@@ -612,8 +609,7 @@ async function tests() {
       }
     });
 
-    for await (const chunk of r) {
-      chunk;
+    for await (const chunk of r) { // eslint-disable-line no-unused-vars
       break;
     }
     assert.strictEqual(r.destroyed, true);
@@ -631,9 +627,7 @@ async function tests() {
       assert.strictEqual(r.destroyed, false);
     });
 
-    for await (const chunk of r) {
-      chunk;
-    }
+    for await (const chunk of r) {} // eslint-disable-line no-unused-vars
 
     assert.strictEqual(r.destroyed, true);
   }
@@ -699,6 +693,122 @@ async function tests() {
   });
 }
 
+// AsyncIterator non-destroying iterator
+{
+  function createReadable() {
+    return Readable.from((async function* () {
+      await Promise.resolve();
+      yield 5;
+      await Promise.resolve();
+      yield 7;
+      await Promise.resolve();
+    })());
+  }
+
+  function createErrorReadable() {
+    const opts = { read() { throw new Error('inner'); } };
+    return new Readable(opts);
+  }
+
+  // Check default destroys on return
+  (async function() {
+    const readable = createReadable();
+    for await (const chunk of readable.iterator()) {
+      assert.strictEqual(chunk, 5);
+      break;
+    }
+
+    assert.ok(readable.destroyed);
+  })().then(common.mustCall());
+
+  // Check explicit destroying on return
+  (async function() {
+    const readable = createReadable();
+    for await (const chunk of readable.iterator({ destroyOnReturn: true })) {
+      assert.strictEqual(chunk, 5);
+      break;
+    }
+
+    assert.ok(readable.destroyed);
+  })().then(common.mustCall());
+
+  // Check default destroys on error
+  (async function() {
+    const readable = createErrorReadable();
+    try {
+      // eslint-disable-next-line no-unused-vars
+      for await (const chunk of readable) { }
+      assert.fail('should have thrown');
+    } catch (err) {
+      assert.strictEqual(err.message, 'inner');
+    }
+
+    assert.ok(readable.destroyed);
+  })().then(common.mustCall());
+
+  // Check explicit destroys on error
+  (async function() {
+    const readable = createErrorReadable();
+    const opts = { destroyOnError: true, destroyOnReturn: false };
+    try {
+      // eslint-disable-next-line no-unused-vars
+      for await (const chunk of readable.iterator(opts)) { }
+      assert.fail('should have thrown');
+    } catch (err) {
+      assert.strictEqual(err.message, 'inner');
+    }
+
+    assert.ok(readable.destroyed);
+  })().then(common.mustCall());
+
+  // Check explicit non-destroy with return true
+  (async function() {
+    const readable = createErrorReadable();
+    const opts = { destroyOnError: false, destroyOnReturn: true };
+    try {
+      // eslint-disable-next-line no-unused-vars
+      for await (const chunk of readable.iterator(opts)) { }
+      assert.fail('should have thrown');
+    } catch (err) {
+      assert.strictEqual(err.message, 'inner');
+    }
+
+    assert.ok(!readable.destroyed);
+  })().then(common.mustCall());
+
+  // Check explicit non-destroy with return true
+  (async function() {
+    const readable = createReadable();
+    const opts = { destroyOnReturn: false };
+    for await (const chunk of readable.iterator(opts)) {
+      assert.strictEqual(chunk, 5);
+      break;
+    }
+
+    assert.ok(!readable.destroyed);
+
+    for await (const chunk of readable.iterator(opts)) {
+      assert.strictEqual(chunk, 7);
+    }
+
+    assert.ok(readable.destroyed);
+  })().then(common.mustCall());
+
+  // Check non-object options.
+  {
+    const readable = createReadable();
+    assert.throws(
+      () => readable.iterator(42),
+      {
+        code: 'ERR_INVALID_ARG_TYPE',
+        name: 'TypeError',
+        message: 'The "options" argument must be of type object. Received ' +
+                 'type number (42)',
+      }
+    );
+  }
+}
+
 {
   let _req;
   const server = http.createServer((request, response) => {
@@ -717,9 +827,8 @@ async function tests() {
 
         let _err;
         try {
-          for await (const chunk of res) {
-            chunk;
-          }
+          // eslint-disable-next-line no-unused-vars
+          for await (const chunk of res) {}
         } catch (err) {
           _err = err;
         }
